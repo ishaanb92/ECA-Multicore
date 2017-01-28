@@ -27,7 +27,7 @@
 #include <assert.h>
 #include <math.h>
 
-#define NUM_THREADS 2 
+#define NUM_THREADS 2   
 
 
 /******
@@ -83,6 +83,7 @@ double pixel_dy;
 double subsample_dx;
 double subsample_dy;
 
+// No mutexes needed, since the threads operate on different parts of the image
 void *pixel_ops(void *t) {
     long tid;
     tid = (long) t;
