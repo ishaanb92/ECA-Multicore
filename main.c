@@ -20,17 +20,76 @@
 
 #include "raymath.h"
 #include "shaders.h"
+#include "pthread.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
 
+#define NUM_THREADS 2
+
+
+/******
+ * Constants that have a large effect on performance */
+
+/* how many levels to generate spheres */
+enum { sphereflake_recursion = 0 };
+
+/* output image size */
+enum { height = 30 };
+enum { width = 30 };
+
+/* antialiasing samples, more is higher quality, 0 for no AA */
+enum { halfSamples = 0 };
+/******/
+
+/* color depth to output for ppm */
+enum { max_color = 255 };
+
+/* z value for ray */
+enum { z = 0 };
 
 static double dirs[6][3] =
 { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
 static const int opposites[] = { 1, 0, 3, 2, 5, 4 };
 
+// Making pointer to file global
+
+FILE *fp;
+
+// Making the matrices global
+
+float res_0[2600];
+float res_1[2600];
+float res_2[2600];
+
+// Definitions for multithreading
+pthread_t threads[NUM_THREADS];
+pthread_mutex_t writeToFile;
+
+void *multi_threaded_fprintf(void *t) {
+    long tid;
+    tid = (long)t;
+    int scan_start;
+
+    scan_start = tid*(height/NUM_THREADS);
+
+    for (int px = 0; px < width; px++) {
+        for (int py = scan_start; py < scan_start + (height/NUM_THREADS); py++) {
+            // Add mutex here
+            pthread_mutex_lock(&writeToFile);        
+			fprintf(fp, "%.0f %.0f %.0f\n", res_0[px*width + py], res_1[px*width + py], res_2[px*width + py]);
+            pthread_mutex_unlock(&writeToFile);
+        }
+        
+        pthread_mutex_lock(&writeToFile);        
+		fprintf(fp, "\n");
+        pthread_mutex_unlock(&writeToFile);
+    }
+    
+    pthread_exit((void *)t);
+}
 
 static void
 add_sphereflake( scene_t* scene, int sphere_id, int parent_id, int dir,
@@ -136,25 +195,6 @@ free_scene( scene_t* arg )
 	arg->sphere_count = 0;
 }
 
-/******
- * Constants that have a large effect on performance */
-
-/* how many levels to generate spheres */
-enum { sphereflake_recursion = 0 };
-
-/* output image size */
-enum { height = 30 };
-enum { width = 30 };
-
-/* antialiasing samples, more is higher quality, 0 for no AA */
-enum { halfSamples = 0 };
-/******/
-
-/* color depth to output for ppm */
-enum { max_color = 255 };
-
-/* z value for ray */
-enum { z = 0 };
 
 int
 main( int argc, char **argv )
@@ -180,9 +220,16 @@ main( int argc, char **argv )
 	= halfSamples ? pixel_dy / ((double)halfSamples*2.0)
 			: pixel_dy;
 
-	float res_0[2600];
-	float res_1[2600];
-	float res_2[2600];
+    // Make the threads joinable
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    // Initialise the mutex
+    pthread_mutex_init(&writeToFile, NULL);
+    int rc; // Holds the return code for thread operations
+    
+    void *status;
 
 	/* for every pixel */
 	for( int px=0; px<width; ++px )
@@ -250,10 +297,28 @@ main( int argc, char **argv )
 		}
 	}
 
-	FILE *fp = fopen("res.ppm", "w");
+	fp = fopen("res.ppm", "w");
 	fprintf(fp, "P3\n%d %d\n255\n", width, height);
 
-	for( int px=0; px<width; ++px )
+// Writing to the file is a bottle neck. This can be multi-threaded
+    for (int i = 0; i < NUM_THREADS; i ++) {
+        rc = pthread_create(&threads[i],NULL,multi_threaded_fprintf,(void *)i);
+        if (rc) {
+            printf("%s :: Error code from pthread_create is %d \n",__FUNCTION__,rc);
+            exit(-1);
+        }
+    }
+
+// We need to wait for all threads to finish before closing the file    
+    for (int j = 0; j < NUM_THREADS; j++) {
+        rc = pthread_join(threads[j],&status);
+        if (rc) {
+            printf("%s :: pthread_join() failed with error code %d \n",__FUNCTION__,rc);
+            exit (-1);
+        }
+    }
+
+/*	for( int px=0; px<width; ++px )
 	{
 		for( int py=0; py<height; ++py )
 		{
@@ -261,6 +326,7 @@ main( int argc, char **argv )
 		}
 		fprintf(fp, "\n");
 	}
+*/
 	fclose(fp);
 
 
