@@ -27,7 +27,7 @@
 #include <assert.h>
 #include <math.h>
 
-#define NUM_THREADS 2
+#define NUM_THREADS 2 
 
 
 /******
@@ -87,13 +87,13 @@ void *pixel_ops(void *t) {
     long tid;
     tid = (long) t;
 
-    int scan_start = tid*(height/NUM_THREADS);
-    int scan_end = scan_start + (height/NUM_THREADS);
+    int scan_start = tid*(width/NUM_THREADS);
+    int scan_end = scan_start + (width/NUM_THREADS);
 
-	for( int px=0; px<width; ++px )
+	for( int px = scan_start; px < scan_end; ++px )
 	{
 		const double x = pixel_dx * ((double)( px-(width/2) ));
-		for( int py = scan_start ; py < scan_end; ++py )
+		for( int py = 0; py < height; ++py )
 		{
 			const double y = pixel_dy * ((double)( py-(height/2) ));
 			Vec3 pixel_color;
