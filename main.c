@@ -89,7 +89,7 @@ void *pixel_ops(void *t) {
     tid = (long) t;
 
 
-	for( int px = 0  ; px < width/3; ++px )
+	for( int px = 0  ; px < 2*(width/3); ++px )
 	{
 		const double x = pixel_dx * ((double)( px-(width/2) ));
 		for( int py = 0; py < height; ++py )
@@ -335,7 +335,7 @@ main( int argc, char **argv )
     }
 
 
-	for( int px = width/3  ; px < width ; ++px )
+	for( int px = 2*(width/3)  ; px < width ; ++px )
 	{
 		const double x = pixel_dx * ((double)( px-(width/2) ));
 		for( int py = 0; py < height; ++py )
